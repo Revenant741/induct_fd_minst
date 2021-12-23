@@ -28,6 +28,7 @@ RUN groupadd -o -g $D_GID $D_USER \
 RUN pip install \
         toml\
         numpy\
+        tqdm\
         tensorflow \
         matplotlib \
         pandas \

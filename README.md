@@ -29,8 +29,6 @@
     
     * esn_model.py esn_modelの宣言
 
-      * Normal_Binde_ESN_Model  普通の拘束条件付きESN
-
       * Binde_ESN_Execution_Model  内部状態を観測出来るようにした拘束条件付きESN
 
   * Hessianfree.py HessianFree法のプログラム

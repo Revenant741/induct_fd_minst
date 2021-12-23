@@ -1,76 +1,107 @@
 import argparse
-from input import inputdata
-from my_def import hessianfree
-from my_def import Analysis
-from my_def import Use_Model
+from functools import total_ordering
+from input import mnist
+from model import esn_mnist_model as Model
+from model import rnn as rnn
+import matplotlib.pyplot as plt
+import model
+import torch
+import torch.nn as nn
+from sklearn.metrics import accuracy_score
 import train
+from my_def import hessianfree
 
 def add_arguments(parser):
   parser.add_argument('--device', type=str, default="cuda:0", help='cpu or cuda')
-  parser.add_argument('--epoch', type=int, default=180)
-  parser.add_argument('--name', type=str, default="hf_ga_best", help='save_file_name')
-  parser.add_argument('--batch', type=int,default=10, help='batch_size')
-  parser.add_argument('--binde_path', type=str, default='src/data/ga_hf_5_binde.dat', help='import_file_name_of_binde')
-  parser.add_argument('--model_path', type=str, default='src/data/ga_hf_5_model.pkl', help='import_file_name_model')
-  parser.add_argument('--After_serch', type=bool, default=False, help='Use_after_serch_parameter?')
-  parser.add_argument('--model_point', type=int, default=-10, help='Use_after_serch_parameter_point')
-  parser.add_argument('--optimizer', default='HessianFree', help='use_optimizer')
-#python3 src/hessian_train.py --name 'ga_hf_5_best_train' --binde_path 'src/data/ga_hf_5_binde.dat' --model_path 'src/data/ga_hf_5_model.pkl'
-#python3 src/hessian_train.py --name 'loss_eva_bestloss' --binde_path 'src/data/ga_hf_loss_e20_p20_l10/ga_hf_pop_20_binde.dat' --model_path 'src/data/ga_hf_loss_e20_p20_l10/ga_hf_pop_20_model.pkl'
-#python3 src/hessian_train.py --name 'RNN_ana_c0' --device "cuda:0"
-class HessianFree_train(train.Adam_train):
-  def __init__(self,args,model,optimizer,inputdata_test):
-    super().__init__(args,model,optimizer,inputdata_test)
+  parser.add_argument('--batch', type=int,default=1, help='batch_size')
+  parser.add_argument('--epoch', type=int, default=10)
+  parser.add_argument('--size_in', type=int,default=28, help='middle_layer_size')
+  parser.add_argument('--size_middle', type=int,default=128, help='middle_layer_size')
+  parser.add_argument('--size_out', type=int,default=10, help='output_layer_size')
+  parser.add_argument('--write_name', default='mnist_train', help='savename')
 
-  def optimizer_set(self,model):
+def random_binde(args):
+  binde1 = torch.randint(1, 2, (args.size_middle, args.size_middle)).to(args.device)  
+  binde2 = torch.randint(1, 2, (args.size_middle, args.size_middle)).to(args.device)  
+  binde3 = torch.randint(1, 2, (args.size_middle, args.size_middle)).to(args.device)  
+  binde4 = torch.randint(1, 2, (args.size_middle, args.size_middle)).to(args.device)  
+  return binde1, binde2, binde3, binde4
+
+class HessianFree_mnist_train(train.Adam_mnist_train):
+  def __init__(self,args,model,optimizer,loss_func):
+    self.model = model
+    self.args = args    
+    self.optimizer = optimizer
+    self.loss_func = loss_func
+
+  def train(self,trainloader,valloader,binde1,binde2,binde3,binde4):
+    model = self.model
     optimizer = self.optimizer(model.parameters(), use_gnm=True, verbose=True)
-    return optimizer
-
-  def train(self,model,traindata,loss_func,optimizer,train_ans,binde1,binde2,binde3,binde4):
-    optimizer.zero_grad()
-    def closure():
-      losses = 0
-      #学習データをスライス
-      for i in range(traindata.shape[2]):
-        step_input = traindata[:10,:16,i]
-        out, x_1, x_2 = model(step_input,binde1,binde2,binde3,binde4)
-        ans = train_ans[:10,i,:6].type_as(out)
-        loss = loss_func(out,ans)
-        losses += loss
-      losses.backward(retain_graph=True)
-      return losses, out
-    optimizer.step(closure, M_inv=None)
+    model.to(args.device)
+    print(model)
+    loss_func = self.loss_func
+    #epoch数のカウント
+    for epoch in range(args.epoch):
+      #trainloaderからステップ数と入力データ，正解データをインポート
+      #学習
+      for step,(input,train_ans) in enumerate(trainloader):
+        #optimizerの初期化
+        optimizer.zero_grad()
+        #GPU使用の明示
+        input = input.to(args.device)
+        train_ans = train_ans.to(args.device)
+        def closure():
+          #順伝搬の計算
+          output, x_1, x_2 = model(input, binde1, binde2, binde3, binde4)
+          #誤差の計算
+          loss = loss_func(output, train_ans)
+          loss.backward(create_graph=True)
+          return loss, output
+        model.initHidden()
+        optimizer.step(closure, M_inv=None)
+      #モデルの内部状態の初期化
+      #学習で必ず行う動作において精度を算出する
+      with torch.no_grad():
+        total_accuracy = 0
+        total_loss = 0
+        for step,(val_input,val_ans) in enumerate(valloader):
+          #GPU使用の明示
+          val_input = input.to(args.device)
+          val_ans = train_ans.to(args.device)
+          val_output, x_1, x_2 = model(val_input,binde1, binde2, binde3, binde4)
+          pred_y = torch.max(val_output, 1)[1].cpu().data.numpy()
+          #print(f'pred_y{pred_y}')
+          #print(f'val_ans{val_ans}')
+          #accuracy = float((pred_y == val_ans).astype(int).sum()) / float(val_ans.size)
+          accuracy = (accuracy_score(val_ans.cpu().data.numpy(), pred_y))
+          loss = loss_func(val_output, val_ans)
+          total_accuracy += accuracy
+          total_loss += loss
+          #モデルの内部状態の初期化
+          model.initHidden()
+        accuracy_all = total_accuracy/step
+        loss_all = total_loss/step
+        epoch_str = f'Epoch: {epoch+1}'
+        train_loss_str = f'train loss: {loss_all.data.cpu().numpy():.4f}'
+        val_accuracy_str = f'val_accuracy: {accuracy_all:.2f}'
+        print(f'{epoch_str} | {train_loss_str} | {val_accuracy_str}')  
+        
+def main(args):
+  #拘束条件の設定
+  binde1, binde2, binde3, binde4 = random_binde(args)
+  model = Model.Binde_ESN_mnist_Model(args)
+  #rnnの場合（テスト用）
+  #model = rnn.Net(args)
+  #データセットを用意
+  trainloader,valloader, testloader, dataloaders_dict = mnist.setup_mnist(args)
+  optimizer = hessianfree.HessianFree
+  loss = nn.CrossEntropyLoss()
+  HessianFree = HessianFree_mnist_train(args,model,optimizer,loss)
+  HessianFree.train(trainloader,valloader,binde1, binde2, binde3, binde4)
 
 if __name__ == '__main__':
   parser = argparse.ArgumentParser()
   add_arguments(parser)
   args = parser.parse_args()
   print(args)
-  epoch = 1
-  setup = Use_Model.Use_Model(args)
-  inputdata_test = inputdata.make_test(args)
-  if args.optimizer == 'HessianFree':
-    optimizer = hessianfree.HessianFree
-  #探索後の構造分析を行うか否か
-  After_serch = args.After_serch
-  #After_serch = False
-  if After_serch == True:
-    #探索後の重みと接続のデータの指定
-    model, binde1, binde2, binde3, binde4 = setup.finded_ga_binde()
-    print("finded_binde")
-  else:
-    #通常の拘束条件付きESNモデルでの学習
-    #model, binde1, binde2, binde3, binde4 = setup.random_binde()
-    #RNNモデルでの学習
-    model, binde1, binde2, binde3, binde4 = setup.RNN_binde()
-    print("rondom")
-  model = model.to(args.device) 
-  training= HessianFree_train(args,model,optimizer,inputdata_test)
-  model ,epochs, sp_accuracys, tp_accuracys, sp_loss_list, tp_loss_list = training.main(binde1,binde2,binde3,binde4)
-  analysis = Analysis.Analysis(args)
-  analysis.make_image(epochs,sp_accuracys, sp_loss_list, tp_accuracys, tp_loss_list)
-  analysis.save_to_data(model, sp_accuracys, sp_loss_list, tp_accuracys, tp_loss_list)
-  #相互情報量の分析
-  h_in_x, h_in_y, h_out_x, h_out_y = training.mutual_info(model.to(args.device),binde1,binde2,binde3,binde4)
-  analysis.save_to_mutual(h_in_x,h_in_y,h_out_x,h_out_y)
-  analysis.mutual_plot(h_in_x,h_in_y,h_out_x,h_out_y)
+  main(args)

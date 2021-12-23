@@ -5,7 +5,7 @@ import numpy as np
 import random
 
 #内部状態を観測出来るようにした拘束条件付きESN
-class Binde_ESN_Execution_Model(nn.Module):
+class Binde_ESN_Model(nn.Module):
   def __init__(self,args):
     super().__init__()
     self.size_in = 16
@@ -13,7 +13,7 @@ class Binde_ESN_Execution_Model(nn.Module):
     self.size_out = 6
     self.batch_size = args.batch
     self.device = args.device
-    self.binde_esn = Mutial_Info_Reservior(args)
+    self.binde_esn = Reservior(args)
 
   def forward(self,x,binde1,binde2,binde3,binde4):
     output, x1, x2 = self.binde_esn(x,binde1,binde2,binde3,binde4)
@@ -22,12 +22,10 @@ class Binde_ESN_Execution_Model(nn.Module):
   def initHidden(self):
     self.binde_esn.x_1 = torch.zeros(self.batch_size, self.size_middle).to(self.device) 
     self.binde_esn.x_2 = torch.zeros(self.batch_size, self.size_middle).to(self.device) 
-    self.binde_esn.x_out = torch.zeros(self.batch_size, self.size_middle).to(self.device) 
     #self.binde_esn.x_1 = torch.zeros(self.batch_size, self.size_middle).to("cuda:0") 
     #self.binde_esn.x_2 = torch.zeros(self.batch_size, self.size_middle).to("cuda:0") 
-    #self.binde_esn.x_out = torch.zeros(self.batch_size, self.size_middle).to("cuda:0") 
 
-class Mutial_Info_Reservior(nn.Module):
+class Reservior(nn.Module):
   def __init__(self,args):
     super().__init__()
     self.size_in = 16
@@ -37,7 +35,6 @@ class Mutial_Info_Reservior(nn.Module):
     self.device = args.device
     self.x_1 = torch.zeros(self.batch_size, self.size_middle).to(self.device) 
     self.x_2 = torch.zeros(self.batch_size, self.size_middle).to(self.device) 
-    self.x_out = torch.zeros(self.batch_size, self.size_middle).to(self.device) 
     self.w_in = nn.Parameter(torch.Tensor(self.size_middle,self.size_middle))
     self.w_res1 = nn.Parameter(torch.Tensor(self.size_middle,self.size_middle))
     self.w_res12 = nn.Parameter(torch.Tensor(self.size_middle,self.size_middle))

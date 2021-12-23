@@ -10,7 +10,7 @@ import cloudpickle
 class Analysis:
   def __init__(self,args):
     self.args = args
-    self.name = args.name
+    self.name = args.write_name
 
   def make_image(self, epoch, sp_accuracy, sp_loss, tp_accuracy, tp_loss):
     name = self.name
@@ -58,7 +58,7 @@ class Analysis:
             writer.writerow([loss2])
 
   #遺伝的アルゴリズムにおけるデータの保存
-  def ga_save_to_data(self,Models,SP_A,TP_A,SP_L,TP_L,G,W):
+  def ga_save_to_data(self,Models,Acc,Loss,G,W):
     point = 'src/data/'
     #torch.save(model.to('cpu').state_dict(), point+name+'model.pth')
     #重みを一気に保存
@@ -68,48 +68,32 @@ class Analysis:
     with open(f''+point+self.name+'_binde.dat', 'wb') as f:
         pickle.dump(W, f)
     #精度
-    with open(f''+point+self.name+'_sp_acc.csv', 'w') as f:
+    with open(f''+point+self.name+'_acc.csv', 'w') as f:
         writer = csv.writer(f)
-        for sp_accs in SP_A:
-          writer.writerow([sp_accs])
-    with open(f''+point+self.name+'_tp_acc.csv', 'w') as f:
-        writer = csv.writer(f)
-        for tp_accs in TP_A:
-          writer.writerow([tp_accs])
+        for acc in Acc:
+          writer.writerow([acc])
     #誤差
-    with open(f''+point+self.name+'_sp_loss.csv', 'w') as f:
-        writer = csv.writer(f)
-        for sp_losses in SP_L:
-          writer.writerow([sp_losses])
-    with open(f''+point+self.name+'_tp_loss.csv', 'w') as f:
+    with open(f''+point+self.name+'_loss.csv', 'w') as f:
           writer = csv.writer(f)
-          for tp_losses in TP_L:
-            writer.writerow([tp_losses])
+          for losses in Loss:
+            writer.writerow([losses])
     #世代
     with open(f''+point+self.name+'_generation.csv', 'w') as f:
         writer = csv.writer(f)
         for self.args.generation in G:
           writer.writerow([self.args.generation])
   
-  def save_to_mutual(self, h_in_x, h_in_y, h_out_x, h_out_y):
+  def save_to_mutual(self,IN,OUT):
     name = self.name
     point = 'src/data/'
-    with open(f''+point+name+'_h_in_x.csv', 'w') as f:
+    with open(f''+point+name+'_in.csv', 'w') as f:
         writer = csv.writer(f)
-        for x_1 in h_in_x:
-            writer.writerow([x_1])
-    with open(f''+point+name+'_h_in_y.csv', 'w') as f:
-      writer = csv.writer(f)
-      for y_1 in h_in_y:
-          writer.writerow([y_1])
-    with open(f''+point+name+'_h_out_x.csv', 'w') as f:
+        for input_neurons in IN:
+            writer.writerow([input_neurons])
+    with open(f''+point+name+'_out.csv', 'w') as f:
         writer = csv.writer(f)
-        for x_2 in h_out_x:
-            writer.writerow([x_2])
-    with open(f''+point+name+'_h_out_y.csv', 'w') as f:
-      writer = csv.writer(f)
-      for y_2 in h_out_y:
-          writer.writerow([y_2])
+        for out in OUT:
+            writer.writerow([out])
       
   def save_to_var(self,var):
     name = self.name
